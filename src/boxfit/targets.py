@@ -20,6 +20,9 @@ class Target(Protocol):
     def upsert(self, spec: dict[str, Any], points: list[dict[str, Any]]) -> None: ...
     def search(self, spec: dict[str, Any], body: dict[str, Any]) -> list[Any]: ...
     def points_count(self, spec: dict[str, Any]) -> int: ...
+    def indexed_count(self, spec: dict[str, Any]) -> int | None:
+        """Points covered by the index. None = engine can't report; skip the wait."""
+        return None
 
 
 def _req(base: str, key: str, method: str, path: str, body: Any = None) -> Any:
@@ -108,6 +111,12 @@ class QdrantTarget:
     def points_count(self, spec: dict[str, Any]) -> int:
         name = spec["collection"]["name"]
         return _req(self.base, self.key, "GET", f"/collections/{name}")["result"]["points_count"]
+
+    def indexed_count(self, spec: dict[str, Any]) -> int | None:
+        name = spec["collection"]["name"]
+        return _req(self.base, self.key, "GET", f"/collections/{name}")["result"].get(
+            "indexed_vectors_count"
+        )
 
 
 def make_target(spec: dict[str, Any], base: str, key: str) -> Target:

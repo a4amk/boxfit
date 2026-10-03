@@ -18,8 +18,10 @@ from boxfit.correctness import gate
 from boxfit.dataset import generate
 from boxfit.ingest import ingest
 from boxfit.load import run_rung
+from boxfit.ready import await_indexed
 from boxfit.report import verdict, write_combined, write_report
 from boxfit.seed import seed
+from boxfit.targets import make_target
 
 
 def discover_specs(explicit: str | None) -> list[str]:
@@ -36,12 +38,16 @@ def discover_specs(explicit: str | None) -> list[str]:
 
 def run_workload(spec: dict[str, Any], workdir: str, stages: set[str]) -> list[dict[str, Any]]:
     os.makedirs(workdir, exist_ok=True)
+    base = os.environ[spec["target"]["url_env"]].rstrip("/")
+    key = os.environ[spec["target"]["api_key_env"]]
     if "seed" in stages:
         seed(spec)
     if "ingest" in stages:
         if not os.path.exists(os.path.join(workdir, "vecs.npy")):
             generate(spec, workdir)
         ingest(spec, workdir)
+    if "ready" in stages:
+        await_indexed(make_target(spec, base, key), spec)
     if "gate" in stages:
         gate(spec)
     results = []
@@ -60,7 +66,7 @@ def main() -> int:
     ap.add_argument(
         "--stage",
         default="all",
-        choices=("all", "seed", "ingest", "gate", "load"),
+        choices=("all", "seed", "ingest", "ready", "gate", "load"),
         help="run one stage or the full pipeline",
     )
     args = ap.parse_args()
@@ -68,7 +74,7 @@ def main() -> int:
         paths = discover_specs(args.spec)
     except FileNotFoundError as e:
         ap.error(str(e))
-    stages = {"seed", "ingest", "gate", "load"} if args.stage == "all" else {args.stage}
+    stages = {"seed", "ingest", "ready", "gate", "load"} if args.stage == "all" else {args.stage}
 
     if len(paths) == 1 and args.stage == "all":
         spec = load_spec(paths[0])

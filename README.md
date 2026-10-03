@@ -25,7 +25,7 @@ cp .env.example .env # fill in your values; .env is git-ignored, never commit it
 set -a; source .env; set +a
 export QDRANT_URL QDRANT_API_KEY
 
-# full pipeline: seed -> ingest -> correctness gate -> load ladder -> verdict
+# full pipeline: seed -> ingest -> ready -> correctness gate -> load -> verdict
 # (no --spec: runs ./workload.yaml — copy workload.example.yaml first)
 python -m boxfit
 

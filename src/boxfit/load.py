@@ -10,8 +10,27 @@ from typing import Any
 K6_SCRIPT = os.path.join(os.path.dirname(__file__), "..", "..", "k6", "vector-search.js")
 
 
-def _pct(summary: dict[str, Any], metric: str, field: str) -> float:
-    return float(summary["metrics"][metric]["values"][field])
+def parse_summary(summary: dict[str, Any], rung: dict[str, Any]) -> dict[str, Any]:
+    """k6-summary -> rung result. Tolerant of k6 v1 (values-nested) and v2 (flat)."""
+
+    def vals(name: str) -> dict[str, Any]:
+        m = summary["metrics"].get(name, {})
+        return m.get("values", m) if isinstance(m, dict) else {}
+
+    offered = float(rung["rps"]) * _duration_s(str(rung.get("duration", "60s")))
+    achieved = float(vals("http_reqs").get("count", 0))
+    chk = vals("checks_failed") or vals("checks")
+    failed = float(chk.get("fails", 0))
+    total = float(chk.get("passes", 0)) + failed
+    return {
+        "offered": rung["rps"],
+        "achieved": achieved,
+        "achieved_pct": 100.0 * achieved / offered if offered else 0.0,
+        "p50_ms": float(vals("http_req_duration").get("med", 0)),
+        "p95_ms": float(vals("http_req_duration").get("p(95)", 0)),
+        "p99_ms": float(vals("http_req_duration").get("p(99)", 0)),
+        "error_rate": (failed / total) if total else 1.0,
+    }
 
 
 def run_rung(spec: dict[str, Any], rung: dict[str, Any], out_json: str) -> dict[str, Any]:
@@ -33,26 +52,24 @@ def run_rung(spec: dict[str, Any], rung: dict[str, Any], out_json: str) -> dict[
         FILTER_JSON=json.dumps(spec["filter"]),
     )
     subprocess.run(
-        ["k6", "run", "--quiet", "--summary-export", out_json, K6_SCRIPT],
+        [
+            "k6",
+            "run",
+            "--quiet",
+            "--summary-mode",
+            "full",
+            "--summary-trend-stats",
+            "avg,med,p(90),p(95),p(99),max",
+            "--summary-export",
+            out_json,
+            K6_SCRIPT,
+        ],
         env=env,
         check=True,
     )
     with open(out_json) as f:
         summary = json.load(f)
-    metrics = summary["metrics"]
-    offered = float(rung["rps"]) * _duration_s(str(rung.get("duration", "60s")))
-    achieved = float(metrics["http_reqs"]["values"]["count"])
-    failed = float(metrics.get("checks_failed", {}).get("values", {}).get("fails", 0))
-    total = float(metrics.get("checks_failed", {}).get("values", {}).get("passes", 0)) + failed
-    return {
-        "offered": rung["rps"],
-        "achieved": achieved,
-        "achieved_pct": 100.0 * achieved / offered if offered else 0.0,
-        "p50_ms": _pct(summary, "http_req_duration", "med"),
-        "p95_ms": _pct(summary, "http_req_duration", "p(95)"),
-        "p99_ms": _pct(summary, "http_req_duration", "p(99)"),
-        "error_rate": (failed / total) if total else 1.0,
-    }
+    return parse_summary(summary, rung)
 
 
 def _duration_s(dur: str) -> float:

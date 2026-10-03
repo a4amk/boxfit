@@ -104,6 +104,29 @@ class TestSpec(unittest.TestCase):
             text = open(path).read()
             self.assertIn("## b", text)
 
+    def test_await_indexed_stub(self) -> None:
+        from boxfit.ready import await_indexed
+
+        class Stub:
+            name = "stub"
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def seed(self, spec): ...
+            def upsert(self, spec, points): ...
+            def search(self, spec, body): ...
+            def points_count(self, spec):
+                return 10
+
+            def indexed_count(self, spec):
+                self.calls += 1
+                return 10 if self.calls > 1 else 4
+
+        await_indexed(Stub(), {}, timeout_s=60)  # type: ignore[arg-type]
+        with self.assertRaises(TimeoutError):
+            await_indexed(Stub(), {}, timeout_s=0)  # type: ignore[arg-type]
+
 
 if __name__ == "__main__":
     unittest.main()
