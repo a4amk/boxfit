@@ -10,6 +10,7 @@ venv/
 # boxfit runtime artifacts (regenerable, never committed)
 boxfit-work/
 workload.yaml
+.workload/
 *.npy
 k6-rung*.json
 boxfit-report.md

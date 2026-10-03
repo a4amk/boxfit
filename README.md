@@ -32,6 +32,11 @@ python -m boxfit
 # one stage at a time (or point at a checked-in workload directly)
 python -m boxfit --stage seed
 python -m boxfit --spec workloads/saas-tenant-corpus.yaml
+
+# multiple workloads: drop them in .workload/ (git-ignored), bare boxfit
+# runs each in turn and writes one combined verdict (any FAIL fails all)
+mkdir -p .workload && cp workloads/single-namespace.yaml .workload/
+python -m boxfit
 ```
 
 Exit code is 0 on PASS, 1 on FAIL. Report lands in `boxfit-report.md`.
