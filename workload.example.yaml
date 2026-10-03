@@ -1,0 +1,42 @@
+# boxfit workload EXAMPLE: copy to workload.yaml, set your values, run `boxfit`.
+#   cp workload.example.yaml workload.yaml
+# (workload.yaml is git-ignored — your values never get committed.)
+# Minimal smoke, 10k vectors: finishes in ~2 minutes, exercises every stage
+# (seed -> ingest -> gate -> load -> verdict).
+name: minimal-smoke-10k
+target:
+  url_env: QDRANT_URL
+  api_key_env: QDRANT_API_KEY
+  engine: qdrant
+collection:
+  name: boxfit_min
+  dim: 128
+  datatype: uint8
+  distance: Cosine
+  on_disk_payload: true
+  hnsw:
+    m: 16
+    ef_construct: 128
+  payload_indexes:
+    - field: tenant_id
+      kind: keyword
+filter:
+  tenant: { field: tenant_id, match: value }
+  corpus: null
+dataset:
+  vectors: 10000
+  tenants: 10
+  corpora_per_tenant: 1
+  clusters_per_tenant: 2
+  seed: 42
+load:
+  - rps: 50
+    duration: 30s
+    ef: 100
+    top_k: 10
+    corpus_pick: 1
+slo:
+  p50_ms: 25
+  p99_ms: 250
+  error_rate: 0.02
+  achieved_pct: 99

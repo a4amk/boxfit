@@ -1,0 +1,9 @@
+[project]
+name = "boxfit"
+version = "0.1.0"
+description = "Workload acceptance for self-hosted vector databases"
+requires-python = ">=3.10"
+dependencies = ["numpy", "pyyaml"]
+
+[project.scripts]
+boxfit = "boxfit.__main__:main"
