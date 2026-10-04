@@ -138,5 +138,52 @@ class TestSpec(unittest.TestCase):
             )
 
 
+    def test_warm_stub(self) -> None:
+        import tempfile
+
+        import numpy as np
+
+        from boxfit.ready import warm
+
+        spec = load_spec(EXAMPLE_NS)  # tenant-only filter shape
+
+        class Stub:
+            name = "stub"
+            seen: list
+
+            def __init__(self) -> None:
+                self.seen = []
+
+            def seed(self, spec): ...
+            def upsert(self, spec, points): ...
+            def search(self, spec, body):
+                self.seen.append(body)
+                return []
+
+            def points_count(self, spec):
+                return 0
+
+            def indexed_count(self, spec):
+                return 0
+
+        with tempfile.TemporaryDirectory() as d:
+            np.save(
+                f"{d}/vecs.npy",
+                np.zeros((20, int(spec["collection"]["dim"])), dtype=np.uint8),
+            )
+            # minimal spec expects 200000 vectors; shrink via a copy
+            import copy
+
+            small = copy.deepcopy(spec)
+            small["dataset"]["vectors"] = 20
+            small["dataset"]["tenants"] = 2
+            stub = Stub()
+            warm(stub, small, d, n=3)
+            self.assertEqual(len(stub.seen), 3)
+            for body in stub.seen:
+                keys = [c["key"] for c in body["filter"]["must"]]
+                self.assertEqual(keys, ["namespace"])  # tenant-only shape
+
+
 if __name__ == "__main__":
     unittest.main()

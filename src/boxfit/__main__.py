@@ -18,7 +18,7 @@ from boxfit.correctness import gate
 from boxfit.dataset import dataset_path, generate
 from boxfit.ingest import ingest
 from boxfit.load import run_rung
-from boxfit.ready import await_indexed
+from boxfit.ready import await_indexed, warm
 from boxfit.report import verdict, write_combined, write_report
 from boxfit.seed import seed
 from boxfit.targets import make_target
@@ -80,7 +80,9 @@ def run_workload(spec: dict[str, Any], workdir: str, stages: set[str]) -> list[d
             generate(spec, workdir)
         ingest(spec, workdir)
     if "ready" in stages:
-        await_indexed(make_target(spec, base, key), spec)
+        target = make_target(spec, base, key)
+        await_indexed(target, spec)
+        warm(target, spec, workdir, n=int(spec.get("warmup_queries", 200)))
     if "gate" in stages:
         gate(spec)
     results = []
