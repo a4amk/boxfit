@@ -20,8 +20,40 @@ from boxfit.ingest import ingest
 from boxfit.load import run_rung
 from boxfit.ready import await_indexed, warm
 from boxfit.report import verdict, write_combined, write_report
+from boxfit.resources import container_cpu_cap_pct, fit_ceiling, host_snapshot
 from boxfit.seed import seed
 from boxfit.targets import make_target
+
+
+def build_context(
+    spec: dict[str, Any], results: list[dict[str, Any]], base: str, key: str
+) -> dict[str, Any]:
+    """Setup block + ceiling projection for the report."""
+    target = make_target(spec, base, key)
+    context: dict[str, Any] = {
+        "host": host_snapshot(),
+        "collection": {
+            "name": spec["collection"]["name"],
+            "points": target.points_count(spec),
+            "segments": target.segments_count(spec),
+        },
+    }
+    container = spec.get("target", {}).get("container", "qdrant")
+    cap = container_cpu_cap_pct(container)
+    context["cpu_cap_pct"] = cap
+    pts = [
+        (r["achieved"], r["qdrant_cpu_avg"])
+        for r in results
+        if r.get("qdrant_cpu_avg") is not None
+    ]
+    if cap is not None:
+        est, note = fit_ceiling(pts, cap)
+        context["ceiling_rps"] = round(est, 0) if est is not None else None
+        context["ceiling_note"] = note
+    else:
+        context["ceiling_rps"] = None
+        context["ceiling_note"] = "container CPU cap unreadable"
+    return context
 
 
 def discover_specs(explicit: str | None) -> list[str]:
@@ -115,9 +147,12 @@ def main() -> int:
         spec = load_spec(paths[0])
         preflight(spec, stages, args.workdir)
         results = run_workload(spec, args.workdir, stages)
-        return 0 if write_report(spec, results, args.report) else 1
+        base = os.environ[spec["target"]["url_env"]].rstrip("/")
+        key = os.environ[spec["target"]["api_key_env"]]
+        ctx = build_context(spec, results, base, key)
+        return 0 if write_report(spec, results, args.report, ctx) else 1
 
-    runs: list[tuple[str, bool, list[dict[str, Any]]]] = []
+    runs: list[tuple[str, bool, list[dict[str, Any]], dict[str, Any]]] = []
     for path in paths:
         spec = load_spec(path)
         subdir = os.path.join(args.workdir, spec["name"].replace(" ", "-"))
@@ -125,8 +160,11 @@ def main() -> int:
         if args.stage == "all":
             results = run_workload(spec, subdir, stages)
             ok, _ = verdict(results, spec["slo"])
-            write_report(spec, results, f"boxfit-{spec['name']}.md")
-            runs.append((spec["name"], ok, results))
+            base = os.environ[spec["target"]["url_env"]].rstrip("/")
+            key = os.environ[spec["target"]["api_key_env"]]
+            ctx = build_context(spec, results, base, key)
+            write_report(spec, results, f"boxfit-{spec['name']}.md", ctx)
+            runs.append((spec["name"], ok, results, ctx))
         else:
             run_workload(spec, subdir, stages)
     if args.stage == "all":

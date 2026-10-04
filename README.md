@@ -39,7 +39,11 @@ mkdir -p .workload && cp workloads/single-namespace.yaml .workload/
 python -m boxfit
 ```
 
-Exit code is 0 on PASS, 1 on FAIL. Report lands in `boxfit-report.md`.
+Exit code is 0 on PASS, 1 on FAIL. Report lands in `boxfit-report.md`: per-rung
+latency plus per-rung Qdrant CPU/mem sampling, a Setup block (host, collection),
+and an estimated hardware ceiling — linear projection of achieved-RPS to
+container CPU% up to the cgroup cap. The ceiling is an estimate with a stated
+confidence note, refused outright when the data can't support one.
 
 ## Workload spec
 
@@ -49,6 +53,7 @@ target:
   url_env: QDRANT_URL # env var holding the base URL (secrets never in files)
   api_key_env: QDRANT_API_KEY
   engine: qdrant # the only shipped engine; add one in src/boxfit/targets.py
+  container: qdrant # docker container sampled for CPU/mem + cap (ceiling math)
 collection:
   name: boxfit_saas
   dim: 512

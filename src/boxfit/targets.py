@@ -20,6 +20,9 @@ class Target(Protocol):
     def upsert(self, spec: dict[str, Any], points: list[dict[str, Any]]) -> None: ...
     def search(self, spec: dict[str, Any], body: dict[str, Any]) -> list[Any]: ...
     def points_count(self, spec: dict[str, Any]) -> int: ...
+    def segments_count(self, spec: dict[str, Any]) -> int | None:
+        """Segment count. None = engine can't report."""
+        return None
     def indexed_count(self, spec: dict[str, Any]) -> int | None:
         """Points covered by the index. None = engine can't report; skip the wait."""
         return None
@@ -111,6 +114,12 @@ class QdrantTarget:
     def points_count(self, spec: dict[str, Any]) -> int:
         name = spec["collection"]["name"]
         return _req(self.base, self.key, "GET", f"/collections/{name}")["result"]["points_count"]
+
+    def segments_count(self, spec: dict[str, Any]) -> int | None:
+        name = spec["collection"]["name"]
+        return _req(self.base, self.key, "GET", f"/collections/{name}")["result"].get(
+            "segments_count"
+        )
 
     def indexed_count(self, spec: dict[str, Any]) -> int | None:
         name = spec["collection"]["name"]

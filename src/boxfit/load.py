@@ -56,6 +56,10 @@ def run_rung(spec: dict[str, Any], rung: dict[str, Any], out_json: str) -> dict[
         f"(ef={rung.get('ef', 100)} top_k={rung.get('top_k', 10)}) ...",
         flush=True,
     )
+    from boxfit.resources import Sampler
+
+    sampler = Sampler(spec.get("target", {}).get("container", "qdrant"))
+    sampler.start()
     # No --quiet: k6's live progress goes to the terminal; the JSON summary
     # is still exported for verdict parsing.
     try:
@@ -83,10 +87,15 @@ def run_rung(spec: dict[str, Any], rung: dict[str, Any], out_json: str) -> dict[
                 flush=True,
             )
         else:
+            sampler.stop()
             raise
     with open(out_json) as f:
         summary = json.load(f)
-    return parse_summary(summary, rung)
+    result = parse_summary(summary, rung)
+    result.update(sampler.stop())
+    cpu = result.get("qdrant_cpu_avg")
+    print(f"  rung done: p50={result['p50_ms']:.1f}ms p99={result['p99_ms']:.1f}ms cpu={cpu}%", flush=True)
+    return result
 
 
 def _duration_s(dur: str) -> float:

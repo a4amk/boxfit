@@ -185,5 +185,29 @@ class TestSpec(unittest.TestCase):
                 self.assertEqual(keys, ["namespace"])  # tenant-only shape
 
 
+    def test_fit_ceiling(self) -> None:
+        from boxfit.resources import fit_ceiling
+
+        est, note = fit_ceiling([(100, 30.0), (250, 60.0), (500, 110.0)], 180.0)
+        self.assertIsNotNone(est)
+        self.assertGreater(est, 500)
+        self.assertEqual(fit_ceiling([(100, 50.0)], 180.0)[0], None)
+        self.assertIsNone(fit_ceiling([(100, 80.0), (250, 70.0)], 180.0)[0])
+
+    def test_context_block(self) -> None:
+        from boxfit.report import context_block
+
+        lines = context_block(
+            {
+                "host": {"nproc": 4, "mem_gb": 11.0, "disk_free_gb": 8.8},
+                "collection": {"name": "c", "points": 100, "segments": 2},
+                "cpu_cap_pct": 180.0,
+                "ceiling_rps": 812.0,
+                "ceiling_note": "",
+            }
+        )
+        self.assertTrue(any("812 RPS" in line for line in lines))
+
+
 if __name__ == "__main__":
     unittest.main()
