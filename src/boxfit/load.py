@@ -58,21 +58,32 @@ def run_rung(spec: dict[str, Any], rung: dict[str, Any], out_json: str) -> dict[
     )
     # No --quiet: k6's live progress goes to the terminal; the JSON summary
     # is still exported for verdict parsing.
-    subprocess.run(
-        [
-            "k6",
-            "run",
-            "--summary-mode",
-            "full",
-            "--summary-trend-stats",
-            "avg,med,p(90),p(95),p(99),max",
-            "--summary-export",
-            out_json,
-            K6_SCRIPT,
-        ],
-        env=env,
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [
+                "k6",
+                "run",
+                "--summary-mode",
+                "full",
+                "--summary-trend-stats",
+                "avg,med,p(90),p(95),p(99),max",
+                "--summary-export",
+                out_json,
+                K6_SCRIPT,
+            ],
+            env=env,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        # k6 exits 99 on threshold breach — the summary is still written, so
+        # score the rung as FAIL with real numbers instead of a traceback.
+        if os.path.exists(out_json):
+            print(
+                f"rung exited k6={e.returncode} (threshold breach) — scoring from summary",
+                flush=True,
+            )
+        else:
+            raise
     with open(out_json) as f:
         summary = json.load(f)
     return parse_summary(summary, rung)
