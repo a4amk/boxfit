@@ -18,6 +18,7 @@ def await_indexed(target: Target, spec: dict[str, Any], timeout_s: float = 3600)
     if target.indexed_count is None:
         return
     deadline = time.time() + timeout_s
+    waited = 0
     while True:
         total = target.points_count(spec)
         indexed = target.indexed_count(spec)
@@ -27,3 +28,6 @@ def await_indexed(target: Target, spec: dict[str, Any], timeout_s: float = 3600)
         if time.time() > deadline:
             raise TimeoutError(f"index not ready: points={total} indexed={indexed}")
         time.sleep(10)
+        waited += 10
+        if waited % 60 == 0:
+            print(f"  waiting for index: points={total} indexed={indexed} ({waited}s)", flush=True)

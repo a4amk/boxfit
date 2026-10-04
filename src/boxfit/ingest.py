@@ -34,6 +34,7 @@ def ingest(spec: dict[str, Any], workdir: str, slice_vectors: int = 500000) -> N
         before = target.points_count(spec)
         t0 = time.time()
         sent = 0
+        last_beat = t0
         for b in range(lo, hi, BATCH):
             e = min(b + BATCH, hi)
             pts = []
@@ -47,6 +48,10 @@ def ingest(spec: dict[str, Any], workdir: str, slice_vectors: int = 500000) -> N
                 pts.append({"id": int(i), "vector": [int(x) for x in vecs[i]], "payload": payload})
             target.upsert(spec, pts)
             sent += len(pts)
+            if time.time() - last_beat >= 60:
+                el = time.time() - t0
+                print(f"  slice [{lo},{hi}) heartbeat: sent={sent} elapsed={el:.0f}s", flush=True)
+                last_beat = time.time()
         after = before
         for _ in range(60):
             time.sleep(5)

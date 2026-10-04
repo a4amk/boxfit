@@ -127,6 +127,16 @@ class TestSpec(unittest.TestCase):
         with self.assertRaises(TimeoutError):
             await_indexed(Stub(), {}, timeout_s=0)  # type: ignore[arg-type]
 
+    def test_preflight_missing_env(self) -> None:
+        from boxfit.__main__ import preflight
+
+        with self.assertRaises(ValueError):
+            preflight(
+                {"target": {"url_env": "BOXFIT_NOPE_URL", "api_key_env": "BOXFIT_NOPE_KEY"}},
+                {"load"},
+                "/tmp",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

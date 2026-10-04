@@ -15,7 +15,7 @@ from typing import Any
 
 from boxfit import load_spec
 from boxfit.correctness import gate
-from boxfit.dataset import generate
+from boxfit.dataset import dataset_path, generate
 from boxfit.ingest import ingest
 from boxfit.load import run_rung
 from boxfit.ready import await_indexed
@@ -36,6 +36,39 @@ def discover_specs(explicit: str | None) -> list[str]:
     return found
 
 
+def preflight(spec: dict[str, Any], stages: set[str], workdir: str) -> None:
+    """Fail in seconds, not after 30 silent minutes. Every check is instant."""
+    import shutil
+    import urllib.request
+
+    for var in (spec["target"]["url_env"], spec["target"]["api_key_env"]):
+        if not os.environ.get(var):
+            raise ValueError(f"env var {var} is not set (see .env.example)")
+    base = os.environ[spec["target"]["url_env"]].rstrip("/")
+    try:
+        urllib.request.urlopen(base + "/", timeout=10).read()
+    except Exception as e:
+        raise ValueError(f"target unreachable at {base}: {e}")
+    if "load" in stages and shutil.which("k6") is None:
+        raise ValueError("k6 not found on PATH (load stage needs it)")
+    if "ingest" in stages:
+        vecs = os.path.join(workdir, "vecs.npy")
+        if os.path.exists(vecs):
+            import numpy as np
+
+            have = len(np.load(vecs, mmap_mode="r"))
+            want = int(spec["dataset"]["vectors"])
+            if have != want:
+                raise ValueError(f"stale dataset: {vecs} has {have}, spec wants {want}")
+    if stages & {"ready", "gate", "load"}:
+        key = os.environ[spec["target"]["api_key_env"]]
+        try:
+            make_target(spec, base, key).points_count(spec)
+        except Exception as e:
+            raise ValueError(f"collection not ready for {sorted(stages)}: {e}")
+    print("preflight ok", flush=True)
+
+
 def run_workload(spec: dict[str, Any], workdir: str, stages: set[str]) -> list[dict[str, Any]]:
     os.makedirs(workdir, exist_ok=True)
     base = os.environ[spec["target"]["url_env"]].rstrip("/")
@@ -43,7 +76,7 @@ def run_workload(spec: dict[str, Any], workdir: str, stages: set[str]) -> list[d
     if "seed" in stages:
         seed(spec)
     if "ingest" in stages:
-        if not os.path.exists(os.path.join(workdir, "vecs.npy")):
+        if not os.path.exists(dataset_path(workdir)):
             generate(spec, workdir)
         ingest(spec, workdir)
     if "ready" in stages:
@@ -78,6 +111,7 @@ def main() -> int:
 
     if len(paths) == 1 and args.stage == "all":
         spec = load_spec(paths[0])
+        preflight(spec, stages, args.workdir)
         results = run_workload(spec, args.workdir, stages)
         return 0 if write_report(spec, results, args.report) else 1
 
@@ -85,6 +119,7 @@ def main() -> int:
     for path in paths:
         spec = load_spec(path)
         subdir = os.path.join(args.workdir, spec["name"].replace(" ", "-"))
+        preflight(spec, stages, subdir)
         if args.stage == "all":
             results = run_workload(spec, subdir, stages)
             ok, _ = verdict(results, spec["slo"])

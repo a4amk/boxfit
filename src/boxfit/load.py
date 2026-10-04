@@ -51,11 +51,17 @@ def run_rung(spec: dict[str, Any], rung: dict[str, Any], out_json: str) -> dict[
         DIM=str(spec["collection"]["dim"]),
         FILTER_JSON=json.dumps(spec["filter"]),
     )
+    print(
+        f"rung {rung['rps']} RPS x {rung.get('duration', '60s')} "
+        f"(ef={rung.get('ef', 100)} top_k={rung.get('top_k', 10)}) ...",
+        flush=True,
+    )
+    # No --quiet: k6's live progress goes to the terminal; the JSON summary
+    # is still exported for verdict parsing.
     subprocess.run(
         [
             "k6",
             "run",
-            "--quiet",
             "--summary-mode",
             "full",
             "--summary-trend-stats",
